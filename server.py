@@ -36,9 +36,6 @@ import pika"""
 # `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-RMQ_IP = "localhost"
-RFCOMM_CHANNEL = 3
-ORDER_ID = 0
 
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
@@ -50,45 +47,46 @@ if __name__ == '__main__':
 
 
     filename = "test.txt"
-    """
-    #PUSH
-    groupID="45110000000052698"
-    url = "https://canvas.instructure.com/api/v1/groups/"+groupID+"/files"
-    raw_token = "Bearer "+canvas_token
-    session = requests.Session()
-    session.headers = {'Authorization' : raw_token}
-    payload = {'name': filename}
-    req = session.post(url,data=payload)
-    req = req.json()
-    items = req['upload_params'].items()
-    upload_url = req['upload_url']
-    payload = list(items)
-    with open(filename,'rb') as file:
-        data = file.read()
-    payload.append(tuple((u'file',data)))
-    req = requests.post(upload_url, files=payload)
-    print(req) #RESPONSE
-    """
-    #PULL
-    groupID = "45110000000052698"
-    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
-    raw_token = "Bearer " + canvas_token
-    session = requests.Session()
-    session.headers = {'Authorization': raw_token}
-    payload = {'name': filename}
-    req = session.get(url)
-    req = req.json()
-    id = ""
-    for item in req:
-        if item['filename'] == filename:
-            id = str(item['id'])
-            break
-    req = session.get(url+id)
-    req = req.json()
-    req = requests.get(req['url'], stream=True)
-    with open(filename, 'wb') as file:
-        for chunk in req.iter_content():
-            file.write(chunk)
+    type = "PUSH"
+    if type == "PUSH":
+        #PUSH
+        groupID="45110000000052698"
+        url = "https://canvas.instructure.com/api/v1/groups/"+groupID+"/files/"
+        raw_token = "Bearer "+canvas_token
+        session = requests.Session()
+        session.headers = {'Authorization' : raw_token}
+        payload = {'name': filename}
+        req = session.post(url,data=payload)
+        req = req.json()
+        items = req['upload_params'].items()
+        upload_url = req['upload_url']
+        payload = list(items)
+        with open(filename,'rb') as file:
+            data = file.read()
+        payload.append(tuple((u'file',data)))
+        req = requests.post(upload_url, files=payload)
+        print(req) #RESPONSE
+    else:
+        #PULL
+        groupID = "45110000000052698"
+        url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
+        raw_token = "Bearer " + canvas_token
+        session = requests.Session()
+        session.headers = {'Authorization': raw_token}
+        payload = {'name': filename}
+        req = session.get(url)
+        req = req.json()
+        id = ""
+        for item in req:
+            if item['filename'] == filename:
+                id = str(item['id'])
+                break
+        req = session.get(url+id)
+        req = req.json()
+        req = requests.get(req['url'], stream=True)
+        with open(filename, 'wb') as file:
+            for chunk in req.iter_content():
+                file.write(chunk)
     """
     text = eval(req2.text)
     upload_params = text["upload_params"]

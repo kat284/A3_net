@@ -21,23 +21,20 @@
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # !/usr/bin/env python3
 
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 import bluetooth
 import sys
 import pika
 from led_pin import *
+from flask import Flask
+from zeroconf import ServiceBrowser, Zeroconf
+
 
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
 # `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-RMQ_IP = "localhost"
-GPIO_MODE = 10
-RED_PIN = 0
-GREEN_PIN = 0
-BLUE_PIN = 0
 
 
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
@@ -46,34 +43,19 @@ BLUE_PIN = 0
 # `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
 # ~~[Functions]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-def loadOptions(argv):
-    global RMQ_IP
-    global GPIO_MODE
-    global RED_PIN
-    global GREEN_PIN
-    global BLUE_PIN
+class MyListener:
 
-    options = {}
-    while argv:
-        if argv[0][0] == '-':
-            options[argv[0]] = argv[1]
-        argv = argv[1:]
-    if (len(options) == 5) and ('-s' in options) and ('-m' in options) and (
-            (options['-m'] == "10") or (options['-m'] == "11")) and ('-r' in options) and ('-g' in options) and (
-            '-b' in options):
-        RMQ_IP = options['-s']
-        GPIO_MODE = eval(options['-m'])
-        RED_PIN = eval(options['-r'])
-        GREEN_PIN = eval(options['-g'])
-        BLUE_PIN = eval(options['-b'])
-    else:
-        return 1
-    return 0
+    def remove_service(self, zeroconf, type, name):
+        print("Service %s removed" % (name,))
 
-
+    def add_service(self, zeroconf, type, name):
+        info = zeroconf.get_service_info(type, name)
+        print("Service %s added, service info: %s" % (name, info))
+"""
 def callback(ch, method, properties, body):
     body = str(body, 'utf-8')
     if body == "red":
+        p = GPIO.PWM(channel, frequency)
         GPIO.output(RED_PIN, GPIO.HIGH)
         GPIO.output(GREEN_PIN, GPIO.LOW)
         GPIO.output(BLUE_PIN, GPIO.LOW)
@@ -94,7 +76,7 @@ def callback(ch, method, properties, body):
         GPIO.output(GREEN_PIN, GPIO.HIGH)
         GPIO.output(BLUE_PIN, GPIO.LOW)
     print("[Checkpoint] Flashing LED to {0}".format(body))
-
+"""
 
 # ~~[Functions]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
@@ -103,17 +85,25 @@ def callback(ch, method, properties, body):
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 if __name__ == '__main__':
-    if loadOptions(sys.argv):
-        print('[ERROR] Arguments missing or are incorrect')
-        print('[ERROR] CLOSING')
-        sys.exit(1)
-    if GPIO_MODE == "10":
-        GPIO.setmode(GPIO.BOARD)
-    else:
+    """
+    #app.run(host='0.0.0.0', port=9999, debug=True)
+
     GPIO.setmode(led_pins['mode'])
-    GPIO.setup(RED_PIN, GPIO.OUT)
-    GPIO.setup(GREEN_PIN, GPIO.OUT)
-    GPIO.setup(BLUE_PIN, GPIO.OUT)
+    GPIO.setup(led_pins['red'], GPIO.OUT)
+    GPIO.setup(led_pins['green'], GPIO.OUT)
+    GPIO.setup(led_pins['blue'], GPIO.OUT)
+    pin_red = GPIO.PWM(led_pins['red'], 50)
+    pin_green = GPIO.PWM(led_pins['green'], 50)
+    pin_blue = GPIO.PWM(led_pins['blue'], 50)
+    """
+    zeroconf = Zeroconf()
+    listener = MyListener()
+    browser = ServiceBrowser(zeroconf, "_http._tcp.local.", listener)
+    try:
+        input("Press enter to exit...\n\n")
+    finally:
+        zeroconf.close()
+    """
     try:
         connection = 0
         credentials = pika.PlainCredentials(username=rmq_params.get("username"), password=rmq_params.get("password"))
@@ -133,6 +123,9 @@ if __name__ == '__main__':
     print("[Checkpoint] Connected to vhost '{0}' on RMQ server at '{1}' as user '{2}'".format(rmq_params.get("vhost"),
                                                                                               RMQ_IP, rmq_params.get(
             "username")))
+    
+    
+    
     try:
         channel.queue_bind(exchange=rmq_params.get("exchange"), queue=rmq_params.get("led_queue"),
                            routing_key=rmq_params.get("led_queue"))
@@ -147,7 +140,7 @@ if __name__ == '__main__':
         connection.close()
         GPIO.cleanup()
         exit(1)
-
+    """
     # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
