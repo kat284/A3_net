@@ -43,6 +43,15 @@ import requests
 from pymongo import MongoClient
 from flask_httpauth import HTTPBasicAuth
 
+
+client = MongoClient('localhost', 27017)
+
+app = Flask(__name__)
+
+auth = HTTPBasicAuth()
+
+db = client['test_database']
+    
 @auth.get_password
 def get_password(username):
     info = {"user": username}
@@ -103,36 +112,21 @@ def canvas_download():
             break
     req = session.get(url + id)
     req = req.json()
-    #req = requests.get(req['url'], stream=True)
-   # with open(filename, 'wb') as file:
-   #     for chunk in req.iter_content():
-    #        file.write(chunk)
+    req = requests.get(req['url'], stream=True)
+    with open(downloading_file , 'wb') as dl_file:
+        for chunk in req.iter_content():
+            dl_file.write(chunk)
 
-    #    strIO = StirngIO.StirngIO()
-    #    r = requests.post("http://127.0.0.1:5000/canvas")
-
-    #    f_data = request.get(response['url'])
-    #    f_data.write(f_data.content)
-
-    #    flask.send_file(f_data)
-
-    #filename = "text.txt"
-    #f_data = open(filename).read()
-
-    #return f_data
-
-    return send_file(req['url'],
+    return send_file(downloading_file,
                      attachment_filename=downloading_file,
                      as_attachment=True)
-
 
 @app.route("/canvas/upload", methods=['POST'])
 @auth.login_required
 def canvas_upload():
-    uploaded_file = request.form.get("file")
-    file = open(uploaded_file, 'r')
-    data = file.read()
-    #file.close()
+    uploaded_file = request.form.get("file")  
+    up_file=open(uploaded_file, 'rb')
+    data = up_file.read()
     groupID = "45110000000052698"
     url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
     raw_token = "Bearer " + canvas_token
@@ -155,7 +149,9 @@ def custom():
         r = requests.post("http://127.0.0.1:5000/custom")
     else:
         r = requests.get("http://127.0.0.1:5000/custom")
-
+        
+        
+"""
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
@@ -163,14 +159,7 @@ def custom():
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 if __name__ == '__main__':
-    #app.run(host='0.0.0.0', port=6000, debug=True)
-    client = MongoClient('localhost', 27017)
-
-    app = Flask(__name__)
-
-    auth = HTTPBasicAuth()
-
-    db = client['test_database']
+    app.run(host='0.0.0.0', port=6000, debug=True)
 
     """  req = session.get(url+id)
         req = req.json()

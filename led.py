@@ -21,115 +21,68 @@
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # !/usr/bin/env python3
 
-#import RPi.GPIO as GPIO
-import bluetooth
-import sys
-import pika
+import RPi.GPIO as GPIO
 from led_pin import *
 from flask import Flask
 from zeroconf import ServiceBrowser, Zeroconf
+import time
 
 
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
 # `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
-# ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-
-# ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
-#::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
-# `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
-# ~~[Functions]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-
-class MyListener:
-
-"""
-def callback(ch, method, properties, body):
-    body = str(body, 'utf-8')
-    if body == "red":
-        p = GPIO.PWM(channel, frequency)
-        GPIO.output(RED_PIN, GPIO.HIGH)
-        GPIO.output(GREEN_PIN, GPIO.LOW)
-        GPIO.output(BLUE_PIN, GPIO.LOW)
-    elif body == "blue":
-        GPIO.output(RED_PIN, GPIO.LOW)
-        GPIO.output(GREEN_PIN, GPIO.LOW)
-        GPIO.output(BLUE_PIN, GPIO.HIGH)
-    elif body == "purple":
-        GPIO.output(RED_PIN, GPIO.HIGH)
-        GPIO.output(GREEN_PIN, GPIO.LOW)
-        GPIO.output(BLUE_PIN, GPIO.HIGH)
-    elif body == "yellow":
-        GPIO.output(RED_PIN, GPIO.HIGH)
-        GPIO.output(GREEN_PIN, GPIO.HIGH)
-        GPIO.output(BLUE_PIN, GPIO.LOW)
-    elif body == "green":
-        GPIO.output(RED_PIN, GPIO.LOW)
-        GPIO.output(GREEN_PIN, GPIO.HIGH)
-        GPIO.output(BLUE_PIN, GPIO.LOW)
-    print("[Checkpoint] Flashing LED to {0}".format(body))
-"""
-
-# ~~[Functions]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
-#::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
-# `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 if __name__ == '__main__':
-
-    #app.run(host='0.0.0.0', port=9999, debug=True)
-"""""
     GPIO.setmode(led_pins['mode'])
     GPIO.setup(led_pins['red'], GPIO.OUT)
     GPIO.setup(led_pins['green'], GPIO.OUT)
     GPIO.setup(led_pins['blue'], GPIO.OUT)
-    pin_red = GPIO.PWM(led_pins['red'], 50)
-    pin_green = GPIO.PWM(led_pins['green'], 50)
-    pin_blue = GPIO.PWM(led_pins['blue'], 50)
-
-        
-
+    pin_red = GPIO.PWM(led_pins['red'], 100)
+    pin_green = GPIO.PWM(led_pins['green'], 100)
+    pin_blue = GPIO.PWM(led_pins['blue'], 100)
     try:
-        connection = 0
-        credentials = pika.PlainCredentials(username=rmq_params.get("username"), password=rmq_params.get("password"))
-        parameters = pika.ConnectionParameters(host=RMQ_IP, virtual_host=rmq_params.get("vhost"),
-                                               credentials=credentials)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
+        #Connect to Server
+        print("NULL")
     except:
-        print("[ERROR] Unable to connect to vhost '{0}' on RMQ server at '{1}' as user '{2}'".format(
-            rmq_params.get("vhost"), RMQ_IP, rmq_params.get("username")))
-        print("[ERROR] Verify that vhost is up, credentials are correct or the vhost name is correct!")
-        print("[ERROR] Connection closing")
-        if connection:
-            connection.close()
-        GPIO.cleanup()
+        print("[ERROR] Failed to connect")
+        GPIO.cleanup() 
         exit(1)
-    print("[Checkpoint] Connected to vhost '{0}' on RMQ server at '{1}' as user '{2}'".format(rmq_params.get("vhost"),
-                                                                                              RMQ_IP, rmq_params.get(
-            "username")))
-    
-    
-    
+    pin_red.start(0)
+    pin_green.start(0)
+    pin_blue.start(0)
+    intensity = [0,0,0,0,0,0]
+    rate = 0.0
+    state = 0
     try:
-        channel.queue_bind(exchange=rmq_params.get("exchange"), queue=rmq_params.get("led_queue"),
-                           routing_key=rmq_params.get("led_queue"))
-        channel.basic_consume(callback, queue=rmq_params.get("led_queue"), no_ack=True)
-        print("[Checkpoint] Consuming from RMQ queue: {0}".format(rmq_params.get("led_queue")))
-        channel.start_consuming()
+        while 1:
+            #if new message Get Argcuments - Set Values
+            for itr in range(0,3):
+                if state == 1:
+                    if intensity[itr] < intensity[itr+3]:
+                        intensity[itr] = intensity[itr] + 1.0;
+                        if intensity[itr] > intensity[itr+3]:
+                            intensity[itr] = intensity[itr+3]
+                    elif intensity[itr] > intensity[itr+3]:
+                        intensity[itr] = intensity[itr]- 1.0;
+                        if intensity[itr] < intensity[itr+3]:
+                            intensity[itr] = intensity[itr+3]
+                else:
+                    if intensity[itr] > 0.0:
+                        intensity[itr] = intensity[itr] - 1.0;
+                        if intensity[itr] < 0.0:
+                            intensity[itr] = 0.0
+            pin_red.ChangeDutyCycle(intensity[0] )
+            pin_green.ChangeDutyCycle(intensity[1] )
+            pin_blue.ChangeDutyCycle(intensity[2] )
+            time.sleep(rate)
     except:
-        print("[ERROR] The queue ({0}) was not found or the led.py process was killed".format(
-            rmq_params.get("led_queue")))
-        print("[ERROR] Verify that the queue is up! You may have to restart the server")
-        print("[ERROR] Connection closing")
-        connection.close()
-        GPIO.cleanup()
+        print("[ERROR] Connection Error or Ctrl+C")
+        GPIO.cleanup() 
         exit(1)
-    """
-    # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+# ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
 # `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
