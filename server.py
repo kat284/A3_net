@@ -21,14 +21,32 @@
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 # !/usr/bin/env python3
 
+
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+""" Example of browsing for a service (in this case, HTTP) """
+import logging
+import socket
+import sys
+from time import sleep
+
+from zeroconf import ServiceBrowser, ServiceStateChange, Zeroconf
+
+from flask import Flask, request, jsonify, make_response, send_file
+import pymongo
+import requests
+from pymongo import MongoClient
+from flask_httpauth import HTTPBasicAuth
+
 from canvas_token import *
 import requests
 import urllib
 import json
-"""from menu import *
+
+from menu import *
 import bluetooth
 from bluetooth import *
-import pika"""
+import pika
 
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
@@ -36,9 +54,179 @@ import pika"""
 # `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
-RMQ_IP = "localhost"
-RFCOMM_CHANNEL = 3
-ORDER_ID = 0
+from flask import Flask, request, jsonify, make_response, send_file
+import pymongo
+import requests
+from pymongo import MongoClient
+from flask_httpauth import HTTPBasicAuth
+
+client = MongoClient('localhost', 27017)
+
+app = Flask(__name__)
+
+auth = HTTPBasicAuth()
+
+db = client['test_database']
+
+
+@auth.get_password
+def get_password(username):
+    info = {"user": username}
+    r = db.posts.find_one(info)
+    if r:
+        return (r.get("pwd"))
+    else:
+        return None
+
+
+@auth.error_handler
+def unauthorized():
+    return make_response(jsonify({'error': 'Unauthorized access'}), 401)
+
+
+@app.route('/cake')
+@auth.login_required
+def index():
+    return 'Hello'
+
+
+@app.route("/led", methods=['POST', 'GET'])
+@auth.login_required
+def led():
+    if request.method == 'POST':
+        print("Good")
+    else:
+        r = requests.get("http://127.0.0.1:5000/led")
+
+
+@app.route("/canvas", methods=['GET'])
+@auth.login_required
+def canvas_ori():
+    groupID = "45110000000052698"
+    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
+    raw_token = "Bearer " + canvas_token
+    session = requests.Session()
+    session.headers = {'Authorization': raw_token}
+    req = session.get(url)
+    req = req.json()
+    for item in req:
+        print(item['filename'])
+    return req.json()
+
+
+@app.route("/canvas/download", methods=['GET'])
+@auth.login_required
+def canvas_download():
+    downloading_file = request.form.get("file")
+    groupID = "45110000000052698"
+    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
+    raw_token = "Bearer " + canvas_token
+    session = requests.Session()
+    session.headers = {'Authorization': raw_token}
+    payload = {'name': downloading_file}
+    req = session.get(url)
+    req = req.json()
+    id = ""
+    for item in req:
+        if item['filename'] == downloading_file:
+            id = str(item['id'])
+            break
+    req = session.get(url + id)
+    req = req.json()
+    req = requests.get(req['url'], stream=True)
+    with open(downloading_file, 'wb') as dl_file:
+        for chunk in req.iter_content():
+            dl_file.write(chunk)
+
+    return send_file(downloading_file,
+                     attachment_filename=downloading_file,
+                     as_attachment=True)
+
+
+@app.route("/canvas/upload", methods=['POST'])
+@auth.login_required
+def canvas_upload():
+    uploaded_file = request.form.get("file")
+    up_file = open(uploaded_file, 'rb')
+    data = up_file.read()
+    groupID = "45110000000052698"
+    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
+    raw_token = "Bearer " + canvas_token
+    session = requests.Session()
+    session.headers = {'Authorization': raw_token}
+    payload = {'name': uploaded_file}
+    req = session.post(url, data=payload)
+    req = req.json()
+    items = req['upload_params'].items()
+    upload_url = req['upload_url']
+    payload = list(items)
+    payload.append(tuple((u'file', data)))
+    req = requests.post(upload_url, files=payload)
+    return req
+
+
+@app.route("/custom", methods=['POST', 'GET'])
+@auth.login_required
+def custom():
+    if request.method == 'POST':
+        r = requests.post("http://127.0.0.1:5000/custom")
+    else:
+        r = requests.get("http://127.0.0.1:5000/custom")
+
+
+@app.route('/calculate/<int:val1>/<int:val2>', methods=['GET'])
+@auth.login_required
+def get_result(val1, val2):
+    global address1
+    global port1
+    customurl = 'http://{}:{}/calculate/'.format(address1, port1) + str(val1)
+    +'/' + str(val2)
+    r = requests.get(customurl)
+    return r.text
+
+
+@app.route('/value', methods=['GET'])
+@auth.login_required
+def post_val():
+    global address1
+    global port1
+    customurl = 'http://{}:{}/calculate/'.format(address1, port1)
+    val = request.args.get('firstnumber')
+    print(val)
+    r = requests.post(customurl, params={'firstnumber': val})
+    # print(r.body)
+    return r.text
+
+def on_service_state_change(zeroconf, service_type, name, state_change):
+    global address1, address2, port1, port2
+
+    print("Service %s of type %s state changed: %s" % (name, service_type, state_change))
+
+    if state_change is ServiceStateChange.Added:
+        info = zeroconf.get_service_info(service_type, name)
+        # if info:
+        if info:
+            print("  Address: %s:%d" % (socket.inet_ntoa(info.address), info.port))
+            print("  Weight: %d, priority: %d" % (info.weight, info.priority))
+
+            print("  Server: %s" % (info.server,))
+            if info.properties:
+                print("  Properties are:")
+                for key, value in info.properties.items():
+                    print("    %s: %s" % (key, value))
+            else:
+                print("  No properties")
+
+            if info.server == 'team6_api.local.':
+                found = True
+                address1 = socket.inet_ntoa(info.address)
+                port1 = info.port
+
+
+        else:
+            print("  No info")
+        print('\n')
+
 
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
@@ -47,155 +235,32 @@ ORDER_ID = 0
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+    if len(sys.argv) > 1:
+        assert sys.argv[1:] == ['--debug']
+        logging.getLogger('zeroconf').setLevel(logging.DEBUG)
 
-
-    filename = "test.txt"
-    """
-    #PUSH
-    groupID="45110000000052698"
-    url = "https://canvas.instructure.com/api/v1/groups/"+groupID+"/files"
-    raw_token = "Bearer "+canvas_token
-    session = requests.Session()
-    session.headers = {'Authorization' : raw_token}
-    payload = {'name': filename}
-    req = session.post(url,data=payload)
-    req = req.json()
-    items = req['upload_params'].items()
-    upload_url = req['upload_url']
-    payload = list(items)
-    with open(filename,'rb') as file:
-        data = file.read()
-    payload.append(tuple((u'file',data)))
-    req = requests.post(upload_url, files=payload)
-    print(req) #RESPONSE
-    """
-    #PULL
-    groupID = "45110000000052698"
-    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
-    raw_token = "Bearer " + canvas_token
-    session = requests.Session()
-    session.headers = {'Authorization': raw_token}
-    payload = {'name': filename}
-    req = session.get(url)
-    req = req.json()
-    id = ""
-    for item in req:
-        if item['filename'] == filename:
-            id = str(item['id'])
-            break
-    req = session.get(url+id)
-    req = req.json()
-    req = requests.get(req['url'], stream=True)
-    with open(filename, 'wb') as file:
-        for chunk in req.iter_content():
-            file.write(chunk)
-    """
-    text = eval(req2.text)
-    upload_params = text["upload_params"]
-    upload_params['file'] = 'text.txt'
-    req2 = requests.post(text['upload_url'],data=upload_params)
-    print(text['upload_url'],upload_params)
-    print(req2.text)
-
+    zeroconf = Zeroconf()
+    print("\nBrowsing services, press Ctrl-C to exit...\n")
+    browser = ServiceBrowser(zeroconf, "_http._tcp.local.", handlers=[on_service_state_change])
 
     try:
-        connection = 0
-        credentials = pika.PlainCredentials(username=rmq_params.get("username"), password=rmq_params.get("password"))
-        parameters = pika.ConnectionParameters(host=RMQ_IP, virtual_host=rmq_params.get("vhost"),
-                                               credentials=credentials)
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-    except:
-        print(
-            "[ERROR] Unable to connect to vhost: {0} on RMQ server at {1} as user: {2}".format(rmq_params.get("vhost"),
-                                                                                               RMQ_IP, rmq_params.get(
-                    "username")))
-        print("[ERROR] Verify that vhost is up, credentials are correct or the vhost name is correct!")
-        print("[ERROR] Connection closing")
-        if connection:
-            connection.close()
-        exit(1)
-    print("[Checkpoint] Connected to vhost '{0}' on RMQ server at '{1}' as user '{2}'".format(rmq_params.get("vhost"),
-                                                                                              RMQ_IP, rmq_params.get(
-            "username")))
-    print("[Checkpoint] Setting up exchanges and queues...")
-    channel.exchange_declare(rmq_params.get("exchange"), exchange_type='direct')
-    channel.queue_declare(rmq_params.get("order_queue"), auto_delete=True)
-    channel.queue_declare(rmq_params.get("led_queue"), auto_delete=True)
-    channel.queue_bind(exchange=rmq_params.get("exchange"), queue=rmq_params.get("order_queue"),
-                       routing_key=rmq_params.get("order_queue"))
-    channel.queue_bind(exchange=rmq_params.get("exchange"), queue=rmq_params.get("led_queue"),
-                       routing_key=rmq_params.get("led_queue"))
-    try:
-        server_socket = 0
-        server_socket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        server_socket.bind((RMQ_IP, RFCOMM_CHANNEL))
-        server_socket.listen(1)
-    except:
-        print("[ERROR] Unable to open the socket")
-        print("[ERROR] Bluetooth socket CLOSING")
-        if server_socket:
-            server_socket.close()
-        connection.close()
-        exit(1)
-    print("[Checkpoint] Bluetooth ready!")
-    while 1:
-        try:
-            print("[Checkpoint] Waiting for connection on RFCOMM channel {0}".format(RFCOMM_CHANNEL))
-            client_socket = 0
-            client_socket, address = server_socket.accept()
-            print("[Checkpoint] Accepted connection from {0}".format(address))
-            channel.basic_publish(exchange=rmq_params.get("exchange"), routing_key=rmq_params.get("led_queue"),
-                                  body="blue")
-            client_socket.send(str(menu))
-            print("[Checkpoint] Sent menu:")  # {0}".format(menu))
-            for item in menu:
-                print("{0}:".format(item))
-                for stat in menu[item]:
-                    print("    {0}: {1}".format(stat, menu[item][stat]))
-            print("")
-            order = eval(str(client_socket.recv(1024), 'utf-8'))
-            print("[Checkpoint] Received order:")
-            print(order)
-            ORDER_ID = ORDER_ID + 1
-            total_price = 0
-            total_time = 0
-            for item in order:
-                info = menu.get(item)
-                if info == None:
-                    print("[ERROR] Order has unknown item.")
-                    client_socket.close()
-                    server_socket.close()
-                    connection.close()
-                    exit(1)
-                total_price = total_price + info.get("price")
-                total_time = total_time + info.get("time")
-            receipt = {"Order ID": ORDER_ID, "Items": order, "Total Price": total_price, "Total Time": total_time}
-            str_receipt = str(receipt)
-            client_socket.send(str_receipt)
-            print("[Checkpoint] Sent receipt:")  # {0}".format(str_receipt))
-            print("    Order ID: {0}".format(ORDER_ID))
-            print("    Items: {0}".format(order))
-            print("    Total Price: {0}".format(total_price))
-            print("    Total Time: {0}".format(total_time))
-            channel.queue_declare(str(ORDER_ID), auto_delete=True)
-            channel.queue_bind(exchange=rmq_params.get("exchange"), queue=str(ORDER_ID), routing_key=str(ORDER_ID))
-            channel.basic_publish(exchange=rmq_params.get("exchange"), routing_key=rmq_params.get("order_queue"),
-                                  body=str_receipt)
-            submit_msg = "Order Update: Your order has been submitted"
-            channel.basic_publish(exchange=rmq_params.get("exchange"), routing_key=str(ORDER_ID), body=submit_msg)
-            client_socket.close()
-            channel.basic_publish(exchange=rmq_params.get("exchange"), routing_key=rmq_params.get("led_queue"),
-                                  body="red")
-            print("[Checkpoint] Closed Bluetooth Conection.")
-        except:
-            print("[ERROR] Communication with the Client Lost or the server.py process was killed")
-            print("[ERROR] Bluetooth socket CLOSING")
-            if client_socket:
-                client_socket.close()
-            server_socket.close()
-            connection.close()
-            exit(1)"""
+        while True:
+            if address1 and port1:
+                break
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        zeroconf.close()
+        print(address1)
+        print(port1)
+
+    app.run(host='0.0.0.0', port=6000, debug=True)
+
+
+
 
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
