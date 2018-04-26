@@ -43,11 +43,6 @@ import requests
 import urllib
 import json
 
-from menu import *
-import bluetooth
-from bluetooth import *
-import pika
-
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
@@ -59,6 +54,12 @@ import pymongo
 import requests
 from pymongo import MongoClient
 from flask_httpauth import HTTPBasicAuth
+
+address1 = None
+port1 = None
+
+address2 = None
+port2 = None
 
 client = MongoClient('localhost', 27017)
 
@@ -82,21 +83,6 @@ def get_password(username):
 @auth.error_handler
 def unauthorized():
     return make_response(jsonify({'error': 'Unauthorized access'}), 401)
-
-
-@app.route('/cake')
-@auth.login_required
-def index():
-    return 'Hello'
-
-
-@app.route("/led", methods=['POST', 'GET'])
-@auth.login_required
-def led():
-    if request.method == 'POST':
-        print("Good")
-    else:
-        r = requests.get("http://127.0.0.1:5000/led")
 
 
 @app.route("/canvas", methods=['GET'])
@@ -164,38 +150,70 @@ def canvas_upload():
     req = requests.post(upload_url, files=payload)
     return req
 
-
-@app.route("/custom", methods=['POST', 'GET'])
+@app.route('/tasks', methods=['GET'])
 @auth.login_required
-def custom():
-    if request.method == 'POST':
-        r = requests.post("http://127.0.0.1:5000/custom")
-    else:
-        r = requests.get("http://127.0.0.1:5000/custom")
-
+def get_tasks():
+    global address1
+    global port1
+    customurl = 'http://{}:{}/tasks'.format(address1, port1)
+    r = requests.get(customurl)
+    return r.text
 
 @app.route('/calculate/<int:val1>/<int:val2>', methods=['GET'])
 @auth.login_required
 def get_result(val1, val2):
     global address1
     global port1
-    customurl = 'http://{}:{}/calculate/'.format(address1, port1) + str(val1)
-    +'/' + str(val2)
+    customurl = 'http://{}:{}/calculate/'.format(address1, port1) + str(val1) +'/' + str(val2)
     r = requests.get(customurl)
     return r.text
 
 
-@app.route('/value', methods=['GET'])
+@app.route('/value/<int:val>', methods=['POST'])
 @auth.login_required
 def post_val():
     global address1
     global port1
-    customurl = 'http://{}:{}/calculate/'.format(address1, port1)
+    customurl = 'http://{}:{}/value/'.format(address1, port1) + str(val)
     val = request.args.get('firstnumber')
     print(val)
-    r = requests.post(customurl, params={'firstnumber': val})
-    # print(r.body)
+    r = requests.post(customurl)
     return r.text
+    
+@app.route('/tasks', methods=['POST'])
+@auth.login_required
+def create_tasks():
+    global address1
+    global port1
+    payload = request.form.get("json")
+    print(payload)
+    customurl = 'http://{}:{}/tasks'.format(address1, port1)
+    r = requests.post(customurl,json=payload)
+    return r.text
+    
+@app.route("/led", methods=['POST', 'GET'])
+@auth.login_required
+def led():
+    global address2
+    global port2
+    payload = {}
+    customurl = 'http://{}:{}/led'.format(address2, port2)
+    if request.method == 'POST':
+        if request.form.get("red") != None:
+            payload["red"] = request.form.get("red")
+        if request.form.get("green") != None:
+            payload["green"] = request.form.get("green")
+        if request.form.get("blue") != None:
+            payload["blue"] = request.form.get("blue")
+        if request.form.get("rate") != None:
+            payload["rate"] = request.form.get("rate")
+        if request.form.get("state") != None:
+            payload["state"] = request.form.get("state")
+        r = requests.post(customurl,json=payload)
+        return r.text
+    else:
+        r = requests.get(customurl)
+        return r.text 
 
 def on_service_state_change(zeroconf, service_type, name, state_change):
     global address1, address2, port1, port2
@@ -217,16 +235,17 @@ def on_service_state_change(zeroconf, service_type, name, state_change):
             else:
                 print("  No properties")
 
-            if info.server == 'team6_api.local.':
+            if info.server == 'CUSTOM_TEAM6.local.':
                 found = True
                 address1 = socket.inet_ntoa(info.address)
                 port1 = info.port
-
-
+            elif info.server == 'LED_TEAM6.local.':
+                found = True
+                address2 = socket.inet_ntoa(info.address)
+                port2 = info.port
         else:
             print("  No info")
         print('\n')
-
 
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
@@ -235,32 +254,16 @@ def on_service_state_change(zeroconf, service_type, name, state_change):
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-    if len(sys.argv) > 1:
-        assert sys.argv[1:] == ['--debug']
-        logging.getLogger('zeroconf').setLevel(logging.DEBUG)
-
     zeroconf = Zeroconf()
-    print("\nBrowsing services, press Ctrl-C to exit...\n")
+    print("\nSetting up Server, press Ctrl-C to exit...\n")
     browser = ServiceBrowser(zeroconf, "_http._tcp.local.", handlers=[on_service_state_change])
 
     try:
-        while True:
-            if address1 and port1:
-                break
-
+        app.run(host='0.0.0.0', port=8000, debug=True)
     except KeyboardInterrupt:
-        pass
-
+       pass 
     finally:
         zeroconf.close()
-        print(address1)
-        print(port1)
-
-    app.run(host='0.0.0.0', port=6000, debug=True)
-
-
-
 
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #

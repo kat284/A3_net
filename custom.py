@@ -40,7 +40,7 @@ def get_tasks():
     return jsonify({'tasks': tasks})
 
 
-@app.route('/calculate/<str:val1>/<str:val2>', methods=['GET'])
+@app.route('/calculate/<int:val1>/<int:val2>', methods=['GET'])
 def get_result(val1, val2):
     return jsonify({'result': str(val1 * val2)})
 
@@ -67,44 +67,22 @@ def create_task():
     return jsonify({'task': task}), 201
 
 
-#################################################################
-@app.route('/todo/api/v1.0/tasks2', methods=['GET'])
-def get_tasks2():
-    return jsonify({'tasks': tasks})
-
-
-@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['GET'])
-def get_task(task_id):
-    task = [task for task in tasks if task['id'] == task_id]
-    if len(task) == 0:
-        abort(404)
-    return jsonify({'task': task[0]})
-
-
 if __name__ == '__main__':
 
-    logging.basicConfig(level=logging.DEBUG)
-    if len(sys.argv) > 1:
-        assert sys.argv[1:] == ['--debug']
-        logging.getLogger('zeroconf').setLevel(logging.DEBUG)
+    desc = {'path': '/~team6_custom/'}
 
-    desc = {'path': '/~paulsm/'}
-
-    info = ServiceInfo("_http._tcp.local.", "Paul's Test Web Site._http._tcp.local.", socket.inet_aton(host), 5000, 0,
-                       0, desc, "team6_api.local.")
+    info = ServiceInfo("_http._tcp.local.", "CUSTOM_TEAM6._http._tcp.local.", socket.inet_aton(host), 5000, 0,
+                       0, desc, "CUSTOM.local.")
 
     zeroconf = Zeroconf()
-    print("Registration of a service, press Ctrl-C to exit...")
+    print("\nSetting up Custom API, press Ctrl-C or Ctrl-Z to exit...\n")
     zeroconf.register_service(info)
     try:
         while True:
-            # sleep(0.1)
-            # app.run(debug=True)
-            app.run(host='0.0.0.0', port=5000, debug=True)
+            app.run(host='0.0.0.0', port=8001, debug=True)
     except KeyboardInterrupt:
         pass
     finally:
-        print("Unregistering...")
         zeroconf.unregister_service(info)
         zeroconf.close()
 

@@ -27,14 +27,62 @@ from flask import Flask
 from zeroconf import ServiceBrowser, Zeroconf
 import time
 
+from flask import Flask, jsonify, make_response, request, abort
+import requests
+from zeroconf import ServiceInfo, Zeroconf
+import logging
+import socket
+import sys
+from time import sleep
+from subprocess import Popen, PIPE
+from multiprocessing import Process, Value
 
-# ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-#      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
-#::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
-# `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
-# ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+cmd = "ip addr list wlan0 |grep 'inet ' |cut -d' ' -f6|cut -d/ -f1"
+host = Popen(cmd, shell=True, stdout=PIPE).stdout.read()
+host = bytes.decode(host).rstrip()
 
-if __name__ == '__main__':
+app = Flask(__name__)
+
+stats = {
+        'red': 0.0,
+        'green': 0.0,
+        'blue': 0.0,
+        'rate': 0.0,
+        'state': 0
+        }
+        
+@app.errorhandler(404)
+def not_found(error):
+    return make_response(jsonify({'error': 'Not found'}), 404)
+
+
+
+@app.route('/led', methods=['GET','POST'])
+def stats():
+    global stats
+    if request.method == 'POST':
+        request = request.json()
+        if request.get("red") != None:
+            stats["red"] = request.get("red")
+        if request.get("green") != None:
+            stats["green"] = request.get("green")
+        if request.get("blue") != None:
+            stats["blue"] = request.get("blue")
+        if request.get("rate") != None:
+            stats["rate"] = request.get("rate")
+        if request.get("state") != None:
+            stats["state"] = request.get("state")
+    else:
+        return jsonify({'Stats': stats})
+   
+def loop(): 
+    stats = {
+        'red': 0.0,
+        'green': 0.0,
+        'blue': 0.0,
+        'rate': 0.0,
+        'state': 0
+        }
     GPIO.setmode(led_pins['mode'])
     GPIO.setup(led_pins['red'], GPIO.OUT)
     GPIO.setup(led_pins['green'], GPIO.OUT)
@@ -42,22 +90,20 @@ if __name__ == '__main__':
     pin_red = GPIO.PWM(led_pins['red'], 100)
     pin_green = GPIO.PWM(led_pins['green'], 100)
     pin_blue = GPIO.PWM(led_pins['blue'], 100)
-    try:
-        #Connect to Server
-        print("NULL")
-    except:
-        print("[ERROR] Failed to connect")
-        GPIO.cleanup()
-        exit(1)
     pin_red.start(0)
     pin_green.start(0)
     pin_blue.start(0)
     intensity = [0,0,0,0,0,0]
     rate = 0.0
     state = 0
-    try:
-        while 1:
-            #if new message Get Argcuments - Set Values
+    loop = 1
+    while loop:
+        try:
+            intensity[3] =stats["red"]
+            intensity[4] =stats["green"]
+            intensity[5] =stats["blue"]
+            rate = stats["rate"]
+            state = stats["state"]
             for itr in range(0,3):
                 if state == 1:
                     if intensity[itr] < intensity[itr+3]:
@@ -77,10 +123,36 @@ if __name__ == '__main__':
             pin_green.ChangeDutyCycle(intensity[1] )
             pin_blue.ChangeDutyCycle(intensity[2] )
             time.sleep(rate)
-    except:
-        print("[ERROR] Connection Error or Ctrl+C")
-        GPIO.cleanup()
-        exit(1)
+        except KeyboardInterrupt:
+            GPIO.cleanup()
+            loop = 0
+            pass
+            
+# ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
+#::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
+# `--'      `-.'      `--'      `--'      `--'      `--'      `.-'      #
+# ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+if __name__ == '__main__':  
+    desc = {'path': '/~team6_led/'}
+
+    info = ServiceInfo("_http._tcp.local.", "LED_TEAM6._http._tcp.local.", socket.inet_aton(host), 5000, 0,
+                       0, desc, "LED.local.")
+
+    zeroconf = Zeroconf()
+    print("\nSetting up LED API, press Ctrl-C to exit...\n")
+    zeroconf.register_service(info)
+    try:
+        process = Process(target=loop)
+        process.start()
+        app.run(host='0.0.0.0', port=8002, debug=True,use_reloader=False)
+        process.join()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        zeroconf.unregister_service(info)
+        zeroconf.close()
 
 # ~~[Core]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
