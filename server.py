@@ -33,7 +33,7 @@ import sys
 
 from zeroconf import ServiceBrowser, ServiceStateChange, Zeroconf
 
-from flask import Flask, request, jsonify, make_response, send_file
+from flask import Flask, request, jsonify, make_response, send_file, abort
 import pymongo
 import requests
 from pymongo import MongoClient
@@ -83,15 +83,18 @@ def unauthorized():
 @auth.login_required
 def canvas_ori():
     groupID = "45110000000052698"
-    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
+    url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files"
     raw_token = "Bearer " + canvas_token
     session = requests.Session()
     session.headers = {'Authorization': raw_token}
     req = session.get(url)
     req = req.json()
+    payload = {}
+    num = 0
     for item in req:
-        print(item['filename'])
-    return req.json()
+        num = num + 1
+        payload["file"+str(num)] = item['filename']
+    return json.dumps(payload) + "\n"
 
 
 @app.route("/canvas/download", methods=['GET'])
@@ -142,13 +145,15 @@ def canvas_upload():
     payload = list(items)
     payload.append(tuple((u'file', data)))
     req = requests.post(upload_url, files=payload)
-    return req
+    return "\n"
 
 @app.route('/calculate/<int:val1>/<int:val2>', methods=['GET'])
 @auth.login_required
 def get_result(val1, val2):
     global address1
     global port1
+    if (address1 == None or port1 == None):
+        abort(400)
     customurl = 'http://{}:{}/calculate/'.format(address1, port1) + str(val1) +'/' + str(val2)
     r = requests.get(customurl)
     return r.text
@@ -159,21 +164,25 @@ def get_result(val1, val2):
 def post_val(val):
     global address1
     global port1
+    if (address1 == None or port1 == None):
+        abort(400)
     customurl = 'http://{}:{}/value/'.format(address1, port1) + str(val)
     val = request.args.get('firstnumber')
     print(val)
     r = requests.post(customurl)
-    return r.text
+    return "\n"
     
 @app.route('/tasks', methods=['POST','GET'])
 @auth.login_required
 def tasks():
     global address1, address2, port1, port2
+    if (address1 == None or port1 == None):
+        abort(400)
     customurl = 'http://{}:{}/tasks'.format(address1, port1)
     if request.method == 'POST':
         payload = request.json
         r = requests.post(customurl,json=payload)
-        return r.text
+        return "\n"
     else:
         r = requests.get(customurl)
         return r.text
@@ -183,21 +192,26 @@ def tasks():
 def led():
     global address2
     global port2
+    if (address2 == None or port2 == None):
+            abort(400)
     payload = {}
     customurl = 'http://{}:{}/led'.format(address2, port2)
     if request.method == 'POST':
-        if request.form.get("red") != None:
-            payload["red"] = request.form.get("red")
-        if request.form.get("green") != None:
-            payload["green"] = request.form.get("green")
-        if request.form.get("blue") != None:
-            payload["blue"] = request.form.get("blue")
-        if request.form.get("rate") != None:
-            payload["rate"] = request.form.get("rate")
-        if request.form.get("state") != None:
-            payload["state"] = request.form.get("state")
+        if not request.json:
+            abort(400)
+        r = request.json
+        if r.get("red") != None:
+            payload["red"] = r.get("red")
+        if r.get("green") != None:
+            payload["green"] = rr.get("green")
+        if r.get("blue") != None:
+            payload["blue"] = r.get("blue")
+        if r.get("rate") != None:
+            payload["rate"] = r.get("rate")
+        if r.get("state") != None:
+            payload["state"] = r.get("state")
         r = requests.post(customurl,json=payload)
-        return r.text
+        return "\nDone\n"
     else:
         r = requests.get(customurl)
         return r.text 

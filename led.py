@@ -47,7 +47,7 @@ stats = {
         'red': 0.0,
         'green': 0.0,
         'blue': 0.0,
-        'rate': 0.0,
+        'rate': 1.0,
         'state': 0
         }
         
@@ -58,31 +58,29 @@ def not_found(error):
 
 
 @app.route('/led', methods=['GET','POST'])
-def stats():
+def process_led():
     global stats
     if request.method == 'POST':
-        request = request.json()
-        if request.get("red") != None:
-            stats["red"] = request.get("red")
-        if request.get("green") != None:
-            stats["green"] = request.get("green")
-        if request.get("blue") != None:
-            stats["blue"] = request.get("blue")
-        if request.get("rate") != None:
-            stats["rate"] = request.get("rate")
-        if request.get("state") != None:
-            stats["state"] = request.get("state")
+		if not request.json:
+			abort(400)
+        r = request.json
+        if r.get("red") != None:
+            stats["red"] = float(r.get("red"))
+        if r.get("green") != None:
+            stats["green"] = float(r.get("green"))
+        if r.get("blue") != None:
+            stats["blue"] = float(r.get("blue"))
+        if r.get("rate") != None:
+            stats["rate"] = float(r.get("rate"))
+        if r.get("state") != None:
+            stats["state"] = int(r.get("state"))
+        loop()
+        return jsonify({'Stats': stats})
     else:
         return jsonify({'Stats': stats})
    
 def loop(): 
-    stats = {
-        'red': 0.0,
-        'green': 0.0,
-        'blue': 0.0,
-        'rate': 0.0,
-        'state': 0
-        }
+    global stats
     GPIO.setwarnings(False) 
     GPIO.setmode(led_pins['mode'])
     GPIO.setup(led_pins['red'], GPIO.OUT)
@@ -94,17 +92,16 @@ def loop():
     pin_red.start(0)
     pin_green.start(0)
     pin_blue.start(0)
-    intensity = [0,0,0,0,0,0]
-    rate = 0.0
-    state = 0
+    intensity = [0.0,0.0,0.0,0.0,0.0,0.0]
     loop = 1
-    while loop:
-        try:
-            intensity[3] =stats["red"]
-            intensity[4] =stats["green"]
-            intensity[5] =stats["blue"]
-            rate = stats["rate"]
-            state = stats["state"]
+    try:
+        intensity[3] =stats["red"]
+        intensity[4] =stats["green"]
+        intensity[5] =stats["blue"]
+        rate = stats["rate"]
+        state = stats["state"]
+        print("apple")
+        while loop == 1:
             for itr in range(0,3):
                 if state == 1:
                     if intensity[itr] < intensity[itr+3]:
@@ -123,11 +120,15 @@ def loop():
             pin_red.ChangeDutyCycle(intensity[0] )
             pin_green.ChangeDutyCycle(intensity[1] )
             pin_blue.ChangeDutyCycle(intensity[2] )
-            time.sleep(rate)
-        except KeyboardInterrupt:
-            GPIO.cleanup()
-            loop = 0
-            pass
+            if((state == 1) and (intensity[0] == intensity[3]) and (intensity[1] == intensity[4]) and (intensity[2] == intensity[5])) or ((state == 0) and (intensity[0] == 0) and (intensity[1] == 0) and (intensity[2] == 0)):
+                loop = 0
+            else:
+                time.sleep(rate)
+    except KeyboardInterrupt:
+        GPIO.cleanup()
+        exit(1)
+    finally:
+        GPIO.cleanup()
             
 # ~~[Preprocessor Directives]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
@@ -145,10 +146,7 @@ if __name__ == '__main__':
     print("\nSetting up LED API, press Ctrl-C to exit...\n")
     zeroconf.register_service(info)
     try:
-        process = Process(target=loop)
-        process.start()
         app.run(host='0.0.0.0', port=8003, debug=True)
-        process.join()
     except KeyboardInterrupt:
         pass
     finally:
