@@ -83,6 +83,7 @@ def loop():
         'rate': 0.0,
         'state': 0
         }
+    GPIO.setwarnings(False) 
     GPIO.setmode(led_pins['mode'])
     GPIO.setup(led_pins['red'], GPIO.OUT)
     GPIO.setup(led_pins['green'], GPIO.OUT)
@@ -137,8 +138,8 @@ def loop():
 if __name__ == '__main__':  
     desc = {'path': '/~team6_led/'}
 
-    info = ServiceInfo("_http._tcp.local.", "LED_TEAM6._http._tcp.local.", socket.inet_aton(host), 5000, 0,
-                       0, desc, "LED.local.")
+    info = ServiceInfo("_http._tcp.local.", "LED_API_TEAM6._http._tcp.local.", socket.inet_aton(host), 8003, 0,
+                       0, desc, "LED_API.local.")
 
     zeroconf = Zeroconf()
     print("\nSetting up LED API, press Ctrl-C to exit...\n")
@@ -146,7 +147,7 @@ if __name__ == '__main__':
     try:
         process = Process(target=loop)
         process.start()
-        app.run(host='0.0.0.0', port=8002, debug=True,use_reloader=False)
+        app.run(host='0.0.0.0', port=8003, debug=True)
         process.join()
     except KeyboardInterrupt:
         pass

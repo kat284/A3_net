@@ -14,9 +14,6 @@
 # Version:                  1.0.0
 # Example usage:            python3 server.py
 # Notes:                    N/A //https://community.canvaslms.com/docs/DOC-10797-421441247
-#    curl -X GET -u 16:qwe http://172.29.28.14:8000/tasks
-#    curl -X POST -u 16:qwe -H "Content-Type: application/json" -d '{"d":"f"}' http://172.29.28.14:8000/tasks
-
 # ~~[Information]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
 #::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/::::::::'/:::::#
@@ -156,7 +153,7 @@ def get_result(val1, val2):
 
 @app.route('/value/<int:val>', methods=['POST'])
 @auth.login_required
-def post_val(val):
+def post_val():
     global address1
     global port1
     customurl = 'http://{}:{}/value/'.format(address1, port1) + str(val)
@@ -167,17 +164,22 @@ def post_val(val):
     
 @app.route('/tasks', methods=['POST','GET'])
 @auth.login_required
-def tasks():
-    global address1, address2, port1, port2
+def create_tasks():
+    global address1
+    global port1
     customurl = 'http://{}:{}/tasks'.format(address1, port1)
+    print("test")
+    return customurl
+    """
     if request.method == 'POST':
-        payload = request.json
+        payload = request.form.get("json")
+        print(payload)
         r = requests.post(customurl,json=payload)
         return r.text
     else:
         r = requests.get(customurl)
         return r.text
-
+    """
 @app.route("/led", methods=['POST', 'GET'])
 @auth.login_required
 def led():
@@ -208,22 +210,32 @@ def on_service_state_change(zeroconf, service_type, name, state_change):
     if state_change is ServiceStateChange.Added:
         info = zeroconf.get_service_info(service_type, name)
         if info:
+            print("  Address: %s:%d" % (socket.inet_ntoa(info.address), info.port))
+            print("  Weight: %d, priority: %d" % (info.weight, info.priority))
+
+            print("  Server: %s" % (info.server,))
+            if info.properties:
+                print("  Properties are:")
+                for key, value in info.properties.items():
+                    print("    %s: %s" % (key, value))
+            else:
+                print("  No properties")
+
             if info.server == 'CUSTOM_API.local.':
-                print('\n')
                 print("Service %s of type %s state changed: %s" % (name, service_type, state_change))
                 found = True
                 address1 = socket.inet_ntoa(info.address)
                 port1 = info.port
                 print("Saved Address & Port for CUSTOM_API")
-                print("\n")
             elif info.server == 'LED_API.local.':
-                print('\n')
                 print("Service %s of type %s state changed: %s" % (name, service_type, state_change))
                 found = True
                 address2 = socket.inet_ntoa(info.address)
                 port2 = info.port
                 print("Saved Address & Port for LED_API")
-                print('\n')
+        else:
+            print(" No info")
+        print('\n')
 
 # ~~[Variables]~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #      .--.      .'-.      .--.      .--.      .--.      .-'.      .--. #
