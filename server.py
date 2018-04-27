@@ -33,12 +33,13 @@ import sys
 
 from zeroconf import ServiceBrowser, ServiceStateChange, Zeroconf
 
-from flask import Flask, request, jsonify, make_response, send_file, abort
+from flask import Flask, request, jsonify, make_response, send_file, abort, url_for, send_from_directory
 import pymongo
 import requests
 from pymongo import MongoClient
 from flask_httpauth import HTTPBasicAuth
-
+import os
+from werkzeug.utils import secure_filename
 from canvas_token import *
 import urllib
 import json
@@ -126,18 +127,29 @@ def canvas_download():
                      as_attachment=True)
 
 
+app.config['UPLOAD_FOLDER'] = '/home/pi/Desktop'
+
 @app.route("/canvas/upload", methods=['POST'])
 @auth.login_required
 def canvas_upload():
-    uploaded_file = request.form.get("file")
-    up_file = open(uploaded_file, 'rb')
+    uploaded_file = request.files['file']
+    name = uploaded_file.filename
+    if 'file' not in request.files:
+        abort(400)
+    
+    if name == '':
+        abort(400)
+    name = secure_filename(name)
+    uploaded_file.save(os.path.join(app.config['UPLOAD_FOLDER'],name))
+    up_file_1 = send_from_directory(app.config['UPLOAD_FOLDER'],name)	
+    up_file = open('/home/pi/Desktop/'+name, 'rb')
     data = up_file.read()
     groupID = "45110000000052698"
     url = "https://canvas.instructure.com/api/v1/groups/" + groupID + "/files/"
     raw_token = "Bearer " + canvas_token
     session = requests.Session()
     session.headers = {'Authorization': raw_token}
-    payload = {'name': uploaded_file}
+    payload = {'name': name}
     req = session.post(url, data=payload)
     req = req.json()
     items = req['upload_params'].items()
